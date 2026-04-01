@@ -10,7 +10,6 @@ CityKart Connect is a React + TypeScript frontend for a city-based marketplace (
 - React Router
 - TanStack Query (installed; ready for API integration)
 - Vitest + Testing Library
-- Playwright (optional e2e)
 
 ## Requirements
 

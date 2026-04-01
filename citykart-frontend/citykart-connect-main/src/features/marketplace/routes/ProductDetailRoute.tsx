@@ -19,8 +19,9 @@ export default function ProductDetailRoute() {
   const shop = shops.find((s) => s.id === product.shopId);
 
   const handleAdd = () => {
-    addToCart(product);
-    toast.success(`${product.name} added to cart`);
+    void addToCart(product)
+      .then(() => toast.success(`${product.name} added to cart`))
+      .catch((err) => toast.error(err instanceof Error ? err.message : "Could not add to cart"));
   };
 
   const related = products.filter((p) => p.category === product.category && p.id !== product.id).slice(0, 4);

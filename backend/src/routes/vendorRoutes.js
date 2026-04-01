@@ -6,6 +6,18 @@ import { productToClient } from "../utils/productDto.js";
 
 const router = Router();
 
+/** Parses booleans from JSON bodies; rejects ambiguous values so "false" is not treated as true. */
+function parseInStockPatch(value) {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "string") {
+    const s = value.trim().toLowerCase();
+    if (s === "true" || s === "1") return true;
+    if (s === "false" || s === "0") return false;
+  }
+  if (typeof value === "number" && !Number.isNaN(value)) return value !== 0;
+  return null;
+}
+
 router.use(requireAuth, requireVendor);
 
 router.get("/products", async (req, res) => {
@@ -79,7 +91,13 @@ router.patch("/products/:productId", async (req, res) => {
     }
     product.status = status;
   }
-  if (inStock !== undefined) product.inStock = Boolean(inStock);
+  if (inStock !== undefined) {
+    const parsed = parseInStockPatch(inStock);
+    if (parsed === null) {
+      return res.status(400).json({ error: "inStock must be a boolean true/false or a boolean string" });
+    }
+    product.inStock = parsed;
+  }
   await product.save();
   res.json({ product: productToClient(product) });
 });

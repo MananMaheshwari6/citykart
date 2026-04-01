@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { ShoppingCart, Star } from "lucide-react";
 import { motion } from "framer-motion";
+import { toast } from "sonner";
 
 import type { Product } from "@/features/marketplace/types";
 import { useCart } from "@/features/cart/cart-context";
@@ -50,7 +51,7 @@ export function ProductCard({ product, index = 0 }: Props) {
             size="sm"
             onClick={(e) => {
               e.preventDefault();
-              addToCart(product);
+              void addToCart(product).catch((err) => toast.error(err instanceof Error ? err.message : "Could not add to cart"));
             }}
             disabled={!product.inStock}
           >

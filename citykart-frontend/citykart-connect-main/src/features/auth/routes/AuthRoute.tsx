@@ -20,20 +20,33 @@ export default function AuthRoute() {
   const [regEmail, setRegEmail] = useState("");
   const [regPassword, setRegPassword] = useState("");
   const [regRole, setRegRole] = useState<"buyer" | "vendor">("buyer");
+  const [submitting, setSubmitting] = useState(false);
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (login(loginEmail, loginPassword)) {
+    setSubmitting(true);
+    try {
+      await login(loginEmail, loginPassword);
       toast.success("Welcome back!");
       navigate("/");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Sign in failed");
+    } finally {
+      setSubmitting(false);
     }
   };
 
-  const handleRegister = (e: React.FormEvent) => {
+  const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (register(regName, regEmail, regPassword, regRole)) {
+    setSubmitting(true);
+    try {
+      await register(regName, regEmail, regPassword, regRole);
       toast.success("Account created!");
       navigate(regRole === "vendor" ? "/vendor" : "/");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Registration failed");
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -52,17 +65,14 @@ export default function AuthRoute() {
             <form onSubmit={handleLogin} className="space-y-4 mt-4">
               <div>
                 <Label htmlFor="login-email">Email</Label>
-                <Input id="login-email" type="email" value={loginEmail} onChange={(e) => setLoginEmail(e.target.value)} placeholder="you@example.com" required />
+                <Input id="login-email" type="email" value={loginEmail} onChange={(e) => setLoginEmail(e.target.value)} placeholder="you@example.com" required disabled={submitting} />
               </div>
               <div>
                 <Label htmlFor="login-pass">Password</Label>
-                <Input id="login-pass" type="password" value={loginPassword} onChange={(e) => setLoginPassword(e.target.value)} placeholder="••••••••" required />
+                <Input id="login-pass" type="password" value={loginPassword} onChange={(e) => setLoginPassword(e.target.value)} placeholder="••••••••" required disabled={submitting} />
               </div>
-              <p className="text-xs text-muted-foreground">
-                Demo mode: include <span className="font-medium">vendor</span> in your email to open vendor features.
-              </p>
-              <Button type="submit" className="w-full">
-                Sign In
+              <Button type="submit" className="w-full" disabled={submitting}>
+                {submitting ? "Signing in…" : "Sign In"}
               </Button>
             </form>
           </TabsContent>
@@ -71,29 +81,29 @@ export default function AuthRoute() {
             <form onSubmit={handleRegister} className="space-y-4 mt-4">
               <div>
                 <Label htmlFor="reg-name">Full Name</Label>
-                <Input id="reg-name" value={regName} onChange={(e) => setRegName(e.target.value)} placeholder="John Doe" required />
+                <Input id="reg-name" value={regName} onChange={(e) => setRegName(e.target.value)} placeholder="John Doe" required disabled={submitting} />
               </div>
               <div>
                 <Label htmlFor="reg-email">Email</Label>
-                <Input id="reg-email" type="email" value={regEmail} onChange={(e) => setRegEmail(e.target.value)} placeholder="you@example.com" required />
+                <Input id="reg-email" type="email" value={regEmail} onChange={(e) => setRegEmail(e.target.value)} placeholder="you@example.com" required disabled={submitting} />
               </div>
               <div>
                 <Label htmlFor="reg-pass">Password</Label>
-                <Input id="reg-pass" type="password" value={regPassword} onChange={(e) => setRegPassword(e.target.value)} placeholder="••••••••" required />
+                <Input id="reg-pass" type="password" value={regPassword} onChange={(e) => setRegPassword(e.target.value)} placeholder="••••••••" required disabled={submitting} />
               </div>
               <div>
                 <Label>Account Type</Label>
                 <div className="flex gap-2 mt-1">
-                  <Button type="button" variant={regRole === "buyer" ? "default" : "outline"} size="sm" onClick={() => setRegRole("buyer")}>
+                  <Button type="button" variant={regRole === "buyer" ? "default" : "outline"} size="sm" onClick={() => setRegRole("buyer")} disabled={submitting}>
                     Buyer
                   </Button>
-                  <Button type="button" variant={regRole === "vendor" ? "default" : "outline"} size="sm" onClick={() => setRegRole("vendor")}>
+                  <Button type="button" variant={regRole === "vendor" ? "default" : "outline"} size="sm" onClick={() => setRegRole("vendor")} disabled={submitting}>
                     Vendor
                   </Button>
                 </div>
               </div>
-              <Button type="submit" className="w-full">
-                Create Account
+              <Button type="submit" className="w-full" disabled={submitting}>
+                {submitting ? "Creating…" : "Create Account"}
               </Button>
             </form>
           </TabsContent>
@@ -102,4 +112,3 @@ export default function AuthRoute() {
     </div>
   );
 }
-

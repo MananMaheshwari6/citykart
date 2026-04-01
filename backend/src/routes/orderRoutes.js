@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { Order } from "../models/Order.js";
 import { Product } from "../models/Product.js";
+import { City } from "../models/City.js";
 import { requireAuth } from "../middleware/auth.js";
 
 const router = Router();
@@ -32,6 +33,11 @@ router.post("/", async (req, res) => {
     if (!cityId || !Array.isArray(items) || items.length === 0) {
       return res.status(400).json({ error: "cityId and non-empty items array are required" });
     }
+    const city = await City.findById(String(cityId)).lean();
+    if (!city) {
+      return res.status(400).json({ error: "Invalid or unknown cityId" });
+    }
+    const cityIdStr = String(cityId);
     const lines = [];
     let total = 0;
     for (const line of items) {
@@ -45,6 +51,9 @@ router.post("/", async (req, res) => {
       const p = await Product.findById(String(line.productId)).lean();
       if (!p || p.status !== "active" || !p.inStock) {
         return res.status(400).json({ error: `Product unavailable: ${line.productId}` });
+      }
+      if (String(p.cityId) !== cityIdStr) {
+        return res.status(400).json({ error: `Product ${line.productId} is not available in the selected city` });
       }
       lines.push({
         productId: p._id,
