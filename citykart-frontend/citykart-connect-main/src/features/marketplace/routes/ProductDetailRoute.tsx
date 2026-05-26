@@ -1,22 +1,104 @@
-import { Link, useParams } from "react-router-dom";
-import { ArrowLeft, Check, ShoppingCart, Star, Store } from "lucide-react";
+import { Link, useNavigate, useParams } from "react-router-dom";
+import { ArrowLeft, Check, PackageX, ShoppingCart, Star, Store } from "lucide-react";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
+import { useQuery } from "@tanstack/react-query";
 
 import { useCart } from "@/features/cart/cart-context";
-import { products, shops } from "@/features/marketplace/data/mock";
+import type { Product, Shop } from "@/features/marketplace/types";
+import { apiFetch, parseJsonError } from "@/lib/api";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
+
+import { ProductCard } from "@/shared/components/ProductCard";
 
 export default function ProductDetailRoute() {
   const { id } = useParams();
+  const navigate = useNavigate();
   const { addToCart } = useCart();
 
-  const product = products.find((p) => p.id === id);
-  if (!product) return <div className="container py-20 text-center text-muted-foreground">Product not found</div>;
+  const { data, isLoading, error } = useQuery<Product>({
+    queryKey: ["product", id],
+    queryFn: () =>
+      apiFetch(`/products/${id}`).then((r) =>
+        r.ok
+          ? r.json().then((j: { product: Product }) => j.product)
+          : r.json().then((e: { error?: string }) => Promise.reject(e.error ?? "Not found"))
+      ),
+    enabled: !!id,
+  });
 
-  const shop = shops.find((s) => s.id === product.shopId);
+  const { data: shop } = useQuery<Shop | undefined>({
+    queryKey: ["shop-for-product", data?.cityId, data?.shopId],
+    enabled: !!data,
+    queryFn: async () => {
+      const res = await apiFetch(`/cities/${encodeURIComponent(data!.cityId)}/shops`);
+      if (!res.ok) throw new Error(await parseJsonError(res));
+      const j = (await res.json()) as { shops: Shop[] };
+      return (j.shops ?? []).find((s) => s.id === data!.shopId);
+    },
+  });
+
+  const { data: relatedProducts } = useQuery<Product[]>({
+    queryKey: ["related", data?.cityId, data?.category],
+    enabled: !!data,
+    queryFn: async () => {
+      const qs = new URLSearchParams();
+      qs.set("cityId", data!.cityId);
+      qs.set("category", data!.category);
+      qs.set("limit", "5");
+      const res = await apiFetch(`/products?${qs.toString()}`);
+      if (!res.ok) throw new Error(await parseJsonError(res));
+      const j = (await res.json()) as { items: Product[] };
+      return (j.items ?? []).filter((p) => p.id !== data!.id).slice(0, 4);
+    },
+  });
+
+  if (isLoading) {
+    return (
+      <div className="container py-8">
+        <Skeleton className="h-5 w-32 mb-6" />
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
+          <Skeleton className="aspect-square rounded-2xl" />
+          <div className="flex flex-col gap-4">
+            <Skeleton className="h-6 w-24" />
+            <Skeleton className="h-8 w-3/4" />
+            <Skeleton className="h-4 w-1/3" />
+            <div className="space-y-2 pt-2">
+              <Skeleton className="h-4 w-full" />
+              <Skeleton className="h-4 w-full" />
+              <Skeleton className="h-4 w-5/6" />
+            </div>
+            <div className="mt-auto pt-8 flex items-end justify-between">
+              <Skeleton className="h-10 w-1/4" />
+              <Skeleton className="h-12 w-40" />
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (error || !data) {
+    return (
+      <div className="container py-20 flex items-center justify-center">
+        <div className="rounded-2xl border bg-card p-10 text-center max-w-md w-full">
+          <PackageX className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+          <h1 className="text-2xl font-bold font-display text-card-foreground">Product not found</h1>
+          <p className="mt-2 text-sm text-muted-foreground">
+            This product may have been removed or is unavailable.
+          </p>
+          <Button variant="outline" className="mt-6" onClick={() => navigate(-1)}>
+            <ArrowLeft className="h-4 w-4 mr-2" /> Back to products
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  const product = data;
 
   const handleAdd = () => {
     void addToCart(product)
@@ -24,7 +106,7 @@ export default function ProductDetailRoute() {
       .catch((err) => toast.error(err instanceof Error ? err.message : "Could not add to cart"));
   };
 
-  const related = products.filter((p) => p.category === product.category && p.id !== product.id).slice(0, 4);
+  const related = relatedProducts ?? [];
 
   return (
     <div className="container py-8">
@@ -95,25 +177,8 @@ export default function ProductDetailRoute() {
         <section className="mt-16">
           <h2 className="text-2xl font-bold font-display text-foreground mb-6">You might also like</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            {related.map((p) => (
-              <Link
-                key={p.id}
-                to={`/product/${p.id}`}
-                className="group rounded-xl border bg-card shadow-card hover:shadow-card-hover transition-all overflow-hidden"
-              >
-                <div className="aspect-square overflow-hidden">
-                  <img
-                    src={p.image}
-                    alt={p.name}
-                    className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-500"
-                    loading="lazy"
-                  />
-                </div>
-                <div className="p-3">
-                  <h3 className="font-semibold text-sm text-card-foreground line-clamp-1">{p.name}</h3>
-                  <p className="text-primary font-bold mt-1">₹{p.price.toLocaleString()}</p>
-                </div>
-              </Link>
+            {related.map((p, i) => (
+              <ProductCard key={p.id} product={p} index={i} />
             ))}
           </div>
         </section>
@@ -121,4 +186,3 @@ export default function ProductDetailRoute() {
     </div>
   );
 }
-

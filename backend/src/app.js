@@ -33,5 +33,10 @@ export function createApp() {
     res.status(404).json({ error: "Not found" });
   });
 
+  app.use((err, req, res, next) => {
+    console.error(err?.stack ?? err);
+    res.status(err?.status ?? 500).json({ error: err?.message ?? "Internal server error" });
+  });
+
   return app;
 }

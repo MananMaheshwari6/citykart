@@ -38,6 +38,9 @@ router.post("/", async (req, res) => {
       return res.status(400).json({ error: "Invalid or unknown cityId" });
     }
     const cityIdStr = String(cityId);
+    const productIds = items.map((i) => i.productId);
+    const productDocs = await Product.find({ _id: { $in: productIds } });
+    const productMap = new Map(productDocs.map((p) => [p._id.toString(), p]));
     const lines = [];
     let total = 0;
     for (const line of items) {
@@ -48,7 +51,7 @@ router.post("/", async (req, res) => {
       if (Number.isNaN(qty) || qty < 1) {
         return res.status(400).json({ error: "Invalid quantity" });
       }
-      const p = await Product.findById(String(line.productId)).lean();
+      const p = productMap.get(line.productId);
       if (!p || p.status !== "active" || !p.inStock) {
         return res.status(400).json({ error: `Product unavailable: ${line.productId}` });
       }

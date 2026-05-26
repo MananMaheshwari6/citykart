@@ -1,11 +1,13 @@
 import { Link, useNavigate } from "react-router-dom";
 import { LogOut, MapPin, Menu, ShoppingCart, Store, User, X } from "lucide-react";
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 
 import { useAuth } from "@/features/auth/auth-context";
 import { useCart } from "@/features/cart/cart-context";
 import { useCity } from "@/features/marketplace/city-context";
-import { cities } from "@/features/marketplace/data/mock";
+import type { City } from "@/features/marketplace/types";
+import { apiFetch } from "@/lib/api";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -17,7 +19,19 @@ export function Header() {
   const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  const cityName = cities.find((c) => c.id === selectedCity)?.name;
+  const { data: cities } = useQuery<City[]>({
+    queryKey: ["cities"],
+    queryFn: async () => {
+      const res = await apiFetch("/cities");
+      if (!res.ok) throw new Error("Failed to load cities");
+      const data = (await res.json()) as { cities: City[] };
+      return data.cities ?? [];
+    },
+    staleTime: Infinity,
+  });
+
+  const cityName =
+    cities?.find((c) => c.id === selectedCity)?.name ?? selectedCity ?? undefined;
 
   return (
     <header className="sticky top-0 z-50 border-b bg-card/80 backdrop-blur-md">

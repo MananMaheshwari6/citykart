@@ -1,4 +1,6 @@
-import React, { createContext, useContext, useState } from "react";
+import React, { createContext, useContext, useEffect, useState } from "react";
+
+const CITY_STORAGE_KEY = "citykart_city";
 
 interface CityContextValue {
   selectedCity: string | null;
@@ -8,7 +10,21 @@ interface CityContextValue {
 const CityContext = createContext<CityContextValue | undefined>(undefined);
 
 export function CityProvider({ children }: { children: React.ReactNode }) {
-  const [selectedCity, setSelectedCity] = useState<string | null>(null);
+  const [selectedCity, setSelectedCity] = useState<string | null>(() => {
+    try {
+      return JSON.parse(localStorage.getItem(CITY_STORAGE_KEY) ?? "null");
+    } catch {
+      return null;
+    }
+  });
+
+  useEffect(() => {
+    if (typeof selectedCity === "string" && selectedCity) {
+      localStorage.setItem(CITY_STORAGE_KEY, JSON.stringify(selectedCity));
+    } else {
+      localStorage.removeItem(CITY_STORAGE_KEY);
+    }
+  }, [selectedCity]);
 
   return (
     <CityContext.Provider value={{ selectedCity, setSelectedCity }}>
@@ -22,4 +38,3 @@ export function useCity() {
   if (!ctx) throw new Error("useCity must be used within CityProvider");
   return ctx;
 }
-

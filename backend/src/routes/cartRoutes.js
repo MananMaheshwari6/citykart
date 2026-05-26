@@ -16,19 +16,23 @@ async function getOrCreateCart(userId) {
   return cart;
 }
 
-router.get("/", async (req, res) => {
-  const cart = await getOrCreateCart(req.userId);
-  const productIds = cart.items.map((i) => i.productId);
-  const products = await Product.find({ _id: { $in: productIds } }).lean();
-  const byId = Object.fromEntries(products.map((p) => [p._id, p]));
-  const items = cart.items
-    .map((line) => {
-      const p = byId[line.productId];
-      if (!p) return null;
-      return { product: productToClient(p), quantity: line.quantity };
-    })
-    .filter(Boolean);
-  res.json({ items });
+router.get("/", async (req, res, next) => {
+  try {
+    const cart = await getOrCreateCart(req.userId);
+    const productIds = cart.items.map((i) => i.productId);
+    const products = await Product.find({ _id: { $in: productIds } }).lean();
+    const byId = Object.fromEntries(products.map((p) => [p._id, p]));
+    const items = cart.items
+      .map((line) => {
+        const p = byId[line.productId];
+        if (!p) return null;
+        return { product: productToClient(p), quantity: line.quantity };
+      })
+      .filter(Boolean);
+    res.json({ items });
+  } catch (err) {
+    next(err);
+  }
 });
 
 router.post("/items", async (req, res) => {
@@ -39,6 +43,9 @@ router.post("/items", async (req, res) => {
   const product = await Product.findById(String(productId)).lean();
   if (!product || product.status !== "active") {
     return res.status(404).json({ error: "Product not found" });
+  }
+  if (!product.inStock) {
+    return res.status(400).json({ error: "Product is out of stock" });
   }
   const qty = Math.max(1, parseInt(String(quantity), 10) || 1);
   const cart = await getOrCreateCart(req.userId);
@@ -52,32 +59,40 @@ router.post("/items", async (req, res) => {
   res.status(201).json({ ok: true });
 });
 
-router.patch("/items/:productId", async (req, res) => {
-  const { productId } = req.params;
-  const { quantity } = req.body || {};
-  if (quantity === undefined) {
-    return res.status(400).json({ error: "quantity is required" });
+router.patch("/items/:productId", async (req, res, next) => {
+  try {
+    const { productId } = req.params;
+    const { quantity } = req.body || {};
+    if (quantity === undefined) {
+      return res.status(400).json({ error: "quantity is required" });
+    }
+    const q = parseInt(String(quantity), 10);
+    if (Number.isNaN(q) || q < 1) {
+      return res.status(400).json({ error: "quantity must be a positive integer" });
+    }
+    const cart = await getOrCreateCart(req.userId);
+    const idx = cart.items.findIndex((i) => i.productId === productId);
+    if (idx < 0) {
+      return res.status(404).json({ error: "Item not in cart" });
+    }
+    cart.items[idx].quantity = q;
+    await cart.save();
+    res.json({ ok: true });
+  } catch (err) {
+    next(err);
   }
-  const q = parseInt(String(quantity), 10);
-  if (Number.isNaN(q) || q < 1) {
-    return res.status(400).json({ error: "quantity must be a positive integer" });
-  }
-  const cart = await getOrCreateCart(req.userId);
-  const idx = cart.items.findIndex((i) => i.productId === productId);
-  if (idx < 0) {
-    return res.status(404).json({ error: "Item not in cart" });
-  }
-  cart.items[idx].quantity = q;
-  await cart.save();
-  res.json({ ok: true });
 });
 
-router.delete("/items/:productId", async (req, res) => {
-  const { productId } = req.params;
-  const cart = await getOrCreateCart(req.userId);
-  cart.items = cart.items.filter((i) => i.productId !== productId);
-  await cart.save();
-  res.json({ ok: true });
+router.delete("/items/:productId", async (req, res, next) => {
+  try {
+    const { productId } = req.params;
+    const cart = await getOrCreateCart(req.userId);
+    cart.items = cart.items.filter((i) => i.productId !== productId);
+    await cart.save();
+    res.json({ ok: true });
+  } catch (err) {
+    next(err);
+  }
 });
 
 router.delete("/", async (req, res) => {

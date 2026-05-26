@@ -1,155 +1,426 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
 import { Navigate } from "react-router-dom";
-import { DollarSign, Package, Plus, Store, TrendingUp } from "lucide-react";
-import { motion } from "framer-motion";
 import { toast } from "sonner";
+import { Plus, Pencil, Trash2, PackagePlus, TrendingUp, CheckCircle, MoreVertical } from "lucide-react";
 
 import { useAuth } from "@/features/auth/auth-context";
+import { apiFetch, parseJsonError } from "@/lib/api";
 
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
-interface VendorProduct {
+type VendorProduct = {
   id: string;
   name: string;
   price: number;
   category: string;
+  description?: string;
   status: "active" | "draft";
-}
+  inStock: boolean;
+  image?: string;
+};
+
+const productSchema = z.object({
+  name: z.string().min(1, "Name is required").max(100),
+  price: z.coerce.number().min(0, "Price must be 0 or more"),
+  category: z.string().min(1, "Category is required"),
+  description: z.string().optional(),
+  status: z.enum(["active", "draft"]),
+});
+type ProductFormValues = z.infer<typeof productSchema>;
 
 export default function VendorDashboardRoute() {
-  const { user, isVendor } = useAuth();
-  const [myProducts, setMyProducts] = useState<VendorProduct[]>([
-    { id: "vp1", name: "Handmade Candle Set", price: 599, category: "Home Decor", status: "active" },
-    { id: "vp2", name: "Organic Face Cream", price: 349, category: "Beauty", status: "active" },
-    { id: "vp3", name: "Bamboo Cutlery Kit", price: 299, category: "Kitchen", status: "draft" },
-  ]);
+  const { user, isVendor, ready } = useAuth();
 
-  const [newProduct, setNewProduct] = useState({ name: "", price: "", category: "", description: "" });
+  if (!ready) return null;
+  if (!user) return <Navigate to="/auth" replace />;
+  if (!isVendor) return <Navigate to="/" replace />;
+
+  const queryClient = useQueryClient();
+
+  const { data: products = [], isLoading, error } = useQuery<VendorProduct[]>({
+    queryKey: ["vendor-products"],
+    queryFn: async () => {
+      const res = await apiFetch("/vendor/products");
+      if (!res.ok) throw new Error(await parseJsonError(res));
+      const json = (await res.json()) as { products?: VendorProduct[]; items?: VendorProduct[] };
+      return json.products ?? json.items ?? [];
+    },
+  });
+
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [editingProduct, setEditingProduct] = useState<VendorProduct | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<VendorProduct | null>(null);
 
-  if (!user) return <Navigate to="/auth" />;
-  if (!isVendor) return <Navigate to="/" />;
+  const form = useForm<ProductFormValues>({
+    resolver: zodResolver(productSchema),
+    defaultValues: { name: "", price: 0, category: "", description: "", status: "active" },
+  });
 
-  const handleAddProduct = () => {
-    if (!newProduct.name || !newProduct.price) {
-      toast.error("Please fill in required fields");
-      return;
+  useEffect(() => {
+    if (editingProduct) {
+      form.reset({
+        name: editingProduct.name,
+        price: editingProduct.price,
+        category: editingProduct.category,
+        description: editingProduct.description ?? "",
+        status: editingProduct.status,
+      });
+    } else {
+      form.reset({ name: "", price: 0, category: "", description: "", status: "active" });
     }
-    setMyProducts((prev) => [
-      ...prev,
-      {
-        id: "vp" + Date.now(),
-        name: newProduct.name,
-        price: Number(newProduct.price),
-        category: newProduct.category || "General",
-        status: "active",
-      },
-    ]);
-    setNewProduct({ name: "", price: "", category: "", description: "" });
-    setDialogOpen(false);
-    toast.success("Product added!");
-  };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editingProduct]);
 
-  const stats = [
-    { label: "Total Products", value: myProducts.length, icon: Package, color: "text-primary" },
-    { label: "Active Listings", value: myProducts.filter((p) => p.status === "active").length, icon: TrendingUp, color: "text-success" },
-    { label: "Total Revenue", value: "₹12,450", icon: DollarSign, color: "text-accent-foreground" },
-  ];
+  const saveMutation = useMutation({
+    mutationFn: async (values: ProductFormValues) => {
+      const url = editingProduct ? `/vendor/products/${editingProduct.id}` : "/vendor/products";
+      const method = editingProduct ? "PATCH" : "POST";
+      const res = await apiFetch(url, { method, body: JSON.stringify(values) });
+      if (!res.ok) throw new Error(await parseJsonError(res));
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["vendor-products"] });
+      setDialogOpen(false);
+      setEditingProduct(null);
+      toast.success(editingProduct ? "Product updated" : "Product added");
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (productId: string) => {
+      const res = await apiFetch(`/vendor/products/${productId}`, { method: "DELETE" });
+      if (!res.ok) throw new Error(await parseJsonError(res));
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["vendor-products"] });
+      setDeleteTarget(null);
+      toast.success("Product deleted");
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
+  const openAdd = () => {
+    setEditingProduct(null);
+    setDialogOpen(true);
+  };
+  const openEdit = (p: VendorProduct) => {
+    setEditingProduct(p);
+    setDialogOpen(true);
+  };
+  const onSubmit = (values: ProductFormValues) => saveMutation.mutate(values);
 
   return (
-    <div className="container py-8">
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-8">
-        <div>
-          <h1 className="text-3xl font-bold font-display text-foreground">Vendor Dashboard</h1>
-          <p className="text-muted-foreground mt-1">Welcome back, {user.name}</p>
+    <div className="min-h-screen bg-background">
+      <div className="border-b bg-card">
+        <div className="max-w-6xl mx-auto px-6 py-6 flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-display font-semibold text-foreground">Vendor Dashboard</h1>
+            <p className="text-sm text-muted-foreground mt-1">Manage your products and listings</p>
+          </div>
+          <Button onClick={openAdd}>
+            <Plus className="h-4 w-4 mr-2" />
+            Add product
+          </Button>
         </div>
-        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-          <DialogTrigger asChild>
-            <Button>
-              <Plus className="h-4 w-4 mr-2" /> Add Product
+      </div>
+
+      <div className="max-w-6xl mx-auto px-6 py-8">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+          <div className="rounded-2xl border bg-card p-5">
+            <div className="inline-block bg-orange-50 rounded-xl p-2">
+              <PackagePlus className="h-5 w-5 text-orange-500" />
+            </div>
+            <p className="text-sm text-muted-foreground mt-3">Total Products</p>
+            <p className="text-3xl font-semibold text-foreground mt-1">{products.length}</p>
+          </div>
+          <div className="rounded-2xl border bg-card p-5">
+            <div className="inline-block bg-green-50 rounded-xl p-2">
+              <CheckCircle className="h-5 w-5 text-green-500" />
+            </div>
+            <p className="text-sm text-muted-foreground mt-3">Active Listings</p>
+            <p className="text-3xl font-semibold text-foreground mt-1">
+              {products.filter((p) => p.status === "active").length}
+            </p>
+          </div>
+          <div className="rounded-2xl border bg-card p-5">
+            <div className="inline-block bg-blue-50 rounded-xl p-2">
+              <TrendingUp className="h-5 w-5 text-blue-500" />
+            </div>
+            <p className="text-sm text-muted-foreground mt-3">Total Revenue</p>
+            <div className="flex items-center gap-2 mt-1">
+              <p className="text-3xl font-semibold text-foreground">₹12,450</p>
+              <Badge variant="secondary">coming soon</Badge>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <h2 className="text-lg font-semibold text-foreground">Your products</h2>
+            <Badge variant="secondary">{products.length}</Badge>
+          </div>
+        </div>
+
+        {isLoading && (
+          <div className="space-y-3">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <Skeleton key={i} className="h-16 rounded-xl w-full" />
+            ))}
+          </div>
+        )}
+
+        {error && !isLoading && (
+          <div className="rounded-2xl border border-destructive/40 bg-destructive/5 p-8 text-center">
+            <p className="text-lg font-semibold text-destructive">Could not load your products</p>
+            <p className="mt-2 text-sm text-muted-foreground">
+              {error instanceof Error ? error.message : "Please try again in a moment."}
+            </p>
+          </div>
+        )}
+
+        {!isLoading && !error && products.length === 0 && (
+          <div className="rounded-2xl border border-dashed bg-card p-10 text-center">
+            <PackagePlus className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+            <h3 className="text-lg font-semibold text-foreground">No products yet</h3>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Add your first product to start selling on CityKart.
+            </p>
+            <Button className="mt-6" onClick={openAdd}>
+              <Plus className="h-4 w-4 mr-2" />
+              Add your first product
             </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle className="font-display">Add New Product</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4 mt-4">
-              <div>
-                <Label>Product Name *</Label>
-                <Input value={newProduct.name} onChange={(e) => setNewProduct((p) => ({ ...p, name: e.target.value }))} placeholder="Product name" />
+          </div>
+        )}
+
+        {!isLoading && !error && products.length > 0 && (
+          <div className="space-y-3">
+            {products.map((product) => (
+              <div
+                key={product.id}
+                className="flex items-center gap-4 p-4 rounded-2xl border bg-card hover:bg-accent/30 transition-colors"
+              >
+                <div className="h-12 w-12 rounded-xl bg-muted shrink-0 flex items-center justify-center overflow-hidden">
+                  {product.image ? (
+                    <img src={product.image} alt={product.name} className="h-full w-full object-cover" />
+                  ) : (
+                    <PackagePlus className="h-5 w-5 text-muted-foreground" />
+                  )}
+                </div>
+
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium text-sm text-card-foreground truncate">{product.name}</p>
+                  <p className="text-xs text-muted-foreground truncate">{product.category}</p>
+                </div>
+
+                <div className="shrink-0 font-semibold text-foreground tabular-nums">
+                  ₹{product.price.toLocaleString()}
+                </div>
+
+                <div className="hidden sm:flex items-center gap-2 shrink-0">
+                  {product.status === "active" ? (
+                    <Badge className="bg-green-100 text-green-700 border-0">Active</Badge>
+                  ) : (
+                    <Badge variant="secondary">Draft</Badge>
+                  )}
+                  {product.inStock ? (
+                    <Badge className="bg-blue-50 text-blue-700 border-0">In stock</Badge>
+                  ) : (
+                    <Badge variant="destructive">Out of stock</Badge>
+                  )}
+                </div>
+
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="icon" className="shrink-0">
+                      <MoreVertical className="h-4 w-4" />
+                      <span className="sr-only">Open product actions</span>
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={() => openEdit(product)}>
+                      <Pencil className="h-4 w-4 mr-2" /> Edit
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() => setDeleteTarget(product)}
+                      className="text-destructive focus:text-destructive"
+                    >
+                      <Trash2 className="h-4 w-4 mr-2" /> Delete
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
-              <div>
-                <Label>Price (₹) *</Label>
-                <Input type="number" value={newProduct.price} onChange={(e) => setNewProduct((p) => ({ ...p, price: e.target.value }))} placeholder="999" />
-              </div>
-              <div>
-                <Label>Category</Label>
-                <Input value={newProduct.category} onChange={(e) => setNewProduct((p) => ({ ...p, category: e.target.value }))} placeholder="e.g. Fashion" />
-              </div>
-              <div>
-                <Label>Description</Label>
-                <Textarea value={newProduct.description} onChange={(e) => setNewProduct((p) => ({ ...p, description: e.target.value }))} placeholder="Product description..." />
-              </div>
-              <Button className="w-full" onClick={handleAddProduct}>
-                Add Product
-              </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
+            ))}
+          </div>
+        )}
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
-        {stats.map((s, i) => (
-          <motion.div
-            key={s.label}
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: i * 0.1 }}
-            className="rounded-xl border bg-card p-6"
-          >
-            <div className="flex items-center gap-3">
-              <div className={`h-10 w-10 rounded-lg bg-secondary flex items-center justify-center ${s.color}`}>
-                <s.icon className="h-5 w-5" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">{s.label}</p>
-                <p className="text-2xl font-bold text-card-foreground">{s.value}</p>
-              </div>
-            </div>
-          </motion.div>
-        ))}
-      </div>
+      <Dialog
+        open={dialogOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            setDialogOpen(false);
+            setEditingProduct(null);
+          } else {
+            setDialogOpen(true);
+          }
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{editingProduct ? "Edit product" : "Add product"}</DialogTitle>
+          </DialogHeader>
 
-      <div className="rounded-xl border bg-card">
-        <div className="p-4 border-b">
-          <h2 className="text-lg font-semibold font-display text-card-foreground flex items-center gap-2">
-            <Store className="h-5 w-5" /> Your Products
-          </h2>
-        </div>
-        <div className="divide-y">
-          {myProducts.map((product) => (
-            <div key={product.id} className="flex items-center justify-between p-4">
-              <div>
-                <p className="font-medium text-card-foreground">{product.name}</p>
-                <p className="text-sm text-muted-foreground">{product.category}</p>
-              </div>
-              <div className="flex items-center gap-4">
-                <span className="font-semibold text-foreground">₹{product.price}</span>
-                <span
-                  className={`text-xs px-2 py-1 rounded-full ${product.status === "active" ? "bg-success/10 text-success" : "bg-muted text-muted-foreground"}`}
-                >
-                  {product.status}
-                </span>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+              <FormField
+                control={form.control}
+                name="name"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Name</FormLabel>
+                    <FormControl>
+                      <Input placeholder="e.g. Fresh Spinach 500g" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="price"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Price (₹)</FormLabel>
+                    <FormControl>
+                      <Input type="number" min="0" step="0.01" placeholder="0.00" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="category"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Category</FormLabel>
+                    <FormControl>
+                      <Input placeholder="e.g. Vegetables" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="description"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Description</FormLabel>
+                    <FormControl>
+                      <Textarea placeholder="Optional description..." rows={3} {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="status"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Status</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select status" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="active">Active — visible to buyers</SelectItem>
+                        <SelectItem value="draft">Draft — hidden from buyers</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={saveMutation.isPending}>
+                  {saveMutation.isPending
+                    ? "Saving..."
+                    : editingProduct
+                      ? "Save changes"
+                      : "Add product"}
+                </Button>
+              </DialogFooter>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => {
+          if (!open) setDeleteTarget(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete &ldquo;{deleteTarget?.name}&rdquo;?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently remove the product from your store. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => deleteTarget && deleteMutation.mutate(deleteTarget.id)}
+              disabled={deleteMutation.isPending}
+            >
+              {deleteMutation.isPending ? "Deleting..." : "Delete product"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
-
