@@ -28,6 +28,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { SmartImage } from "@/shared/components/SmartImage";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -108,6 +109,8 @@ export default function VendorDashboardRoute() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["vendor-products"] });
+      queryClient.invalidateQueries({ queryKey: ["products"] });
+      queryClient.invalidateQueries({ queryKey: ["products-all-cats"] });
       setDialogOpen(false);
       setEditingProduct(null);
       toast.success(editingProduct ? "Product updated" : "Product added");
@@ -122,6 +125,8 @@ export default function VendorDashboardRoute() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["vendor-products"] });
+      queryClient.invalidateQueries({ queryKey: ["products"] });
+      queryClient.invalidateQueries({ queryKey: ["products-all-cats"] });
       setDeleteTarget(null);
       toast.success("Product deleted");
     },
@@ -156,14 +161,14 @@ export default function VendorDashboardRoute() {
       <div className="max-w-6xl mx-auto px-6 py-8">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
           <div className="rounded-2xl border bg-card p-5">
-            <div className="inline-block bg-orange-50 rounded-xl p-2">
+            <div className="inline-block bg-orange-50 dark:bg-orange-950/40 rounded-xl p-2">
               <PackagePlus className="h-5 w-5 text-orange-500" />
             </div>
             <p className="text-sm text-muted-foreground mt-3">Total Products</p>
             <p className="text-3xl font-semibold text-foreground mt-1">{products.length}</p>
           </div>
           <div className="rounded-2xl border bg-card p-5">
-            <div className="inline-block bg-green-50 rounded-xl p-2">
+            <div className="inline-block bg-green-50 dark:bg-green-950/40 rounded-xl p-2">
               <CheckCircle className="h-5 w-5 text-green-500" />
             </div>
             <p className="text-sm text-muted-foreground mt-3">Active Listings</p>
@@ -172,7 +177,7 @@ export default function VendorDashboardRoute() {
             </p>
           </div>
           <div className="rounded-2xl border bg-card p-5">
-            <div className="inline-block bg-blue-50 rounded-xl p-2">
+            <div className="inline-block bg-blue-50 dark:bg-blue-950/40 rounded-xl p-2">
               <TrendingUp className="h-5 w-5 text-blue-500" />
             </div>
             <p className="text-sm text-muted-foreground mt-3">Total Revenue</p>
@@ -228,13 +233,13 @@ export default function VendorDashboardRoute() {
                 key={product.id}
                 className="flex items-center gap-4 p-4 rounded-2xl border bg-card hover:bg-accent/30 transition-colors"
               >
-                <div className="h-12 w-12 rounded-xl bg-muted shrink-0 flex items-center justify-center overflow-hidden">
-                  {product.image ? (
-                    <img src={product.image} alt={product.name} className="h-full w-full object-cover" />
-                  ) : (
-                    <PackagePlus className="h-5 w-5 text-muted-foreground" />
-                  )}
-                </div>
+                <SmartImage
+                  src={product.image}
+                  alt={product.name}
+                  className="h-12 w-12 rounded-xl object-cover shrink-0"
+                  iconFallback
+                />
+
 
                 <div className="flex-1 min-w-0">
                   <p className="font-medium text-sm text-card-foreground truncate">{product.name}</p>
@@ -247,12 +252,16 @@ export default function VendorDashboardRoute() {
 
                 <div className="hidden sm:flex items-center gap-2 shrink-0">
                   {product.status === "active" ? (
-                    <Badge className="bg-green-100 text-green-700 border-0">Active</Badge>
+                    <Badge className="bg-green-100 text-green-700 border-0 dark:bg-green-950/40 dark:text-green-300">
+                      Active
+                    </Badge>
                   ) : (
                     <Badge variant="secondary">Draft</Badge>
                   )}
                   {product.inStock ? (
-                    <Badge className="bg-blue-50 text-blue-700 border-0">In stock</Badge>
+                    <Badge className="bg-blue-50 text-blue-700 border-0 dark:bg-blue-950/40 dark:text-blue-300">
+                      In stock
+                    </Badge>
                   ) : (
                     <Badge variant="destructive">Out of stock</Badge>
                   )}
@@ -289,6 +298,7 @@ export default function VendorDashboardRoute() {
           if (!open) {
             setDialogOpen(false);
             setEditingProduct(null);
+            form.reset({ name: "", price: 0, category: "", description: "", status: "active" });
           } else {
             setDialogOpen(true);
           }
@@ -322,7 +332,16 @@ export default function VendorDashboardRoute() {
                   <FormItem>
                     <FormLabel>Price (₹)</FormLabel>
                     <FormControl>
-                      <Input type="number" min="0" step="0.01" placeholder="0.00" {...field} />
+                      <Input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        placeholder="0.00"
+                        {...field}
+                        onKeyDown={(e) => {
+                          if (e.key === "-") e.preventDefault();
+                        }}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

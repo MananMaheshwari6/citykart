@@ -1,19 +1,22 @@
 import { Link, useNavigate } from "react-router-dom";
-import { LogOut, MapPin, Menu, ShoppingCart, Store, User, X } from "lucide-react";
+import { Heart, LogOut, MapPin, Menu, ShoppingCart, Store, User, X } from "lucide-react";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import { useAuth } from "@/features/auth/auth-context";
 import { useCart } from "@/features/cart/cart-context";
 import { useCity } from "@/features/marketplace/city-context";
+import { useWishlist } from "@/features/wishlist/wishlist-context";
 import type { City } from "@/features/marketplace/types";
 import { apiFetch } from "@/lib/api";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { ThemeToggle } from "@/shared/components/ThemeToggle";
 
 export function Header() {
   const { totalItems } = useCart();
+  const { totalItems: wishlistCount } = useWishlist();
   const { user, logout, isVendor } = useAuth();
   const { selectedCity, setSelectedCity } = useCity();
   const navigate = useNavigate();
@@ -74,6 +77,21 @@ export function Header() {
               </Button>
             </Link>
           )}
+          <ThemeToggle />
+          <Button
+            variant="ghost"
+            size="icon"
+            className="relative"
+            onClick={() => navigate("/wishlist")}
+            aria-label="Wishlist"
+          >
+            <Heart className="h-4 w-4" />
+            {wishlistCount > 0 && (
+              <span className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-rose-500 text-white text-[10px] flex items-center justify-center font-medium">
+                {wishlistCount}
+              </span>
+            )}
+          </Button>
           <Link to="/cart" className="relative">
             <Button variant="ghost" size="icon">
               <ShoppingCart className="h-5 w-5" />
@@ -122,11 +140,20 @@ export function Header() {
               </Button>
             </Link>
           )}
-          <Link to="/cart" onClick={() => setMobileOpen(false)}>
+          <Link to="/wishlist" onClick={() => setMobileOpen(false)}>
             <Button variant="ghost" className="w-full justify-start">
-              <ShoppingCart className="h-4 w-4 mr-2" /> Cart ({totalItems})
+              <Heart className="h-4 w-4 mr-2" /> Wishlist{wishlistCount > 0 ? ` (${wishlistCount})` : ""}
             </Button>
           </Link>
+          <Link to="/cart" onClick={() => setMobileOpen(false)}>
+            <Button variant="ghost" className="w-full justify-start">
+              <ShoppingCart className="h-4 w-4 mr-2" /> Cart{totalItems > 0 ? ` (${totalItems})` : ""}
+            </Button>
+          </Link>
+          <div className="flex items-center justify-between px-3 py-1.5 rounded-md hover:bg-accent">
+            <span className="text-sm font-medium">Theme</span>
+            <ThemeToggle />
+          </div>
           {user ? (
             <Button
               variant="ghost"

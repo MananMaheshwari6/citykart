@@ -19,6 +19,7 @@ interface CartContextValue {
   clearCart: () => Promise<void>;
   totalItems: number;
   totalPrice: number;
+  isLoading: boolean;
 }
 
 const CartContext = createContext<CartContextValue | undefined>(undefined);
@@ -33,6 +34,7 @@ function mapCartResponse(data: { items?: { product: Product; quantity: number }[
 export function CartProvider({ children }: { children: React.ReactNode }) {
   const { user, ready } = useAuth();
   const [items, setItems] = useState<CartItem[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
   const loadCart = useCallback(async () => {
     const res = await apiFetch("/cart");
@@ -56,9 +58,11 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       } catch {
         setItems([]);
       }
+      setIsLoading(false);
       return;
     }
 
+    setIsLoading(true);
     (async () => {
       try {
         const raw = localStorage.getItem(GUEST_CART_KEY);
@@ -81,6 +85,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         /* ignore merge errors */
       }
       await loadCart();
+      setIsLoading(false);
     })();
   }, [ready, user, loadCart]);
 
@@ -179,8 +184,9 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       clearCart,
       totalItems,
       totalPrice,
+      isLoading,
     }),
-    [items, addToCart, removeFromCart, updateQuantity, clearCart, totalItems, totalPrice]
+    [items, addToCart, removeFromCart, updateQuantity, clearCart, totalItems, totalPrice, isLoading]
   );
 
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>;

@@ -1,11 +1,14 @@
 import { Link } from "react-router-dom";
-import { ShoppingCart, Star } from "lucide-react";
+import { Heart, ShoppingCart, Star } from "lucide-react";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
 
 import type { Product } from "@/features/marketplace/types";
 import { useCart } from "@/features/cart/cart-context";
+import { useWishlist } from "@/features/wishlist/wishlist-context";
 import { Button } from "@/components/ui/button";
+import { SmartImage } from "@/shared/components/SmartImage";
+import { cn } from "@/lib/utils";
 
 interface Props {
   product: Product;
@@ -14,21 +17,39 @@ interface Props {
 
 export function ProductCard({ product, index = 0 }: Props) {
   const { addToCart } = useCart();
+  const { toggleWishlist, isWishlisted } = useWishlist();
+  const wishlisted = isWishlisted(product.id);
 
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: index * 0.05, duration: 0.3 }}
-      className="group rounded-xl border bg-card shadow-card hover:shadow-card-hover transition-all duration-300 overflow-hidden"
+      className="group relative rounded-xl border bg-card shadow-card hover:shadow-card-hover transition-all duration-300 overflow-hidden"
     >
+      <button
+        type="button"
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          toggleWishlist(product);
+        }}
+        className="absolute top-2 right-2 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-background/80 backdrop-blur-sm border border-border transition-colors hover:bg-background"
+        aria-label={wishlisted ? "Remove from wishlist" : "Add to wishlist"}
+      >
+        <Heart
+          className={cn(
+            "h-4 w-4 transition-colors",
+            wishlisted ? "fill-rose-500 text-rose-500" : "text-muted-foreground"
+          )}
+        />
+      </button>
       <Link to={`/product/${product.id}`}>
         <div className="aspect-square overflow-hidden">
-          <img
+          <SmartImage
             src={product.image}
             alt={product.name}
             className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
-            loading="lazy"
           />
         </div>
       </Link>
@@ -51,6 +72,7 @@ export function ProductCard({ product, index = 0 }: Props) {
             size="sm"
             onClick={(e) => {
               e.preventDefault();
+              e.stopPropagation();
               void addToCart(product).catch((err) => toast.error(err instanceof Error ? err.message : "Could not add to cart"));
             }}
             disabled={!product.inStock}

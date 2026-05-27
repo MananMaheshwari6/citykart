@@ -1,23 +1,27 @@
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, Check, PackageX, ShoppingCart, Star, Store } from "lucide-react";
+import { ArrowLeft, Check, Heart, PackageX, ShoppingCart, Star, Store } from "lucide-react";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
 import { useQuery } from "@tanstack/react-query";
 
 import { useCart } from "@/features/cart/cart-context";
+import { useWishlist } from "@/features/wishlist/wishlist-context";
 import type { Product, Shop } from "@/features/marketplace/types";
 import { apiFetch, parseJsonError } from "@/lib/api";
+import { cn } from "@/lib/utils";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 
 import { ProductCard } from "@/shared/components/ProductCard";
+import { SmartImage } from "@/shared/components/SmartImage";
 
 export default function ProductDetailRoute() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { addToCart } = useCart();
+  const { toggleWishlist, isWishlisted } = useWishlist();
 
   const { data, isLoading, error } = useQuery<Product>({
     queryKey: ["product", id],
@@ -28,6 +32,7 @@ export default function ProductDetailRoute() {
           : r.json().then((e: { error?: string }) => Promise.reject(e.error ?? "Not found"))
       ),
     enabled: !!id,
+    staleTime: 30 * 1000,
   });
 
   const { data: shop } = useQuery<Shop | undefined>({
@@ -116,7 +121,12 @@ export default function ProductDetailRoute() {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="aspect-square overflow-hidden rounded-2xl border bg-muted">
-          <img src={product.image} alt={product.name} className="h-full w-full object-cover" />
+          <SmartImage
+            src={product.image}
+            alt={product.name}
+            className="h-full w-full object-cover"
+            loading="eager"
+          />
         </motion.div>
 
         <motion.div
@@ -159,15 +169,33 @@ export default function ProductDetailRoute() {
           )}
 
           <div className="mt-auto pt-8">
-            <div className="flex items-end justify-between">
+            <div className="flex items-end justify-between gap-3 flex-wrap">
               <div>
                 <span className="text-sm text-muted-foreground">Price</span>
                 <p className="text-4xl font-bold text-foreground">₹{product.price.toLocaleString()}</p>
               </div>
-              <Button size="lg" onClick={handleAdd} disabled={!product.inStock}>
-                <ShoppingCart className="h-5 w-5 mr-2" />
-                Add to Cart
-              </Button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => toggleWishlist(product)}
+                  className="flex items-center gap-2 rounded-2xl border px-4 py-2.5 text-sm transition-colors hover:bg-accent"
+                  aria-label={
+                    isWishlisted(product.id) ? "Remove from wishlist" : "Add to wishlist"
+                  }
+                >
+                  <Heart
+                    className={cn(
+                      "h-4 w-4",
+                      isWishlisted(product.id) && "fill-rose-500 text-rose-500"
+                    )}
+                  />
+                  {isWishlisted(product.id) ? "Wishlisted" : "Add to wishlist"}
+                </button>
+                <Button size="lg" onClick={handleAdd} disabled={!product.inStock}>
+                  <ShoppingCart className="h-5 w-5 mr-2" />
+                  Add to Cart
+                </Button>
+              </div>
             </div>
           </div>
         </motion.div>

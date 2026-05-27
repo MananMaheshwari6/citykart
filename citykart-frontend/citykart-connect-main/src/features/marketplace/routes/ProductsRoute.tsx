@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { Search, SlidersHorizontal } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 
@@ -7,6 +7,7 @@ import { useCity } from "@/features/marketplace/city-context";
 import type { City, Product, Shop } from "@/features/marketplace/types";
 import { apiFetch, parseJsonError } from "@/lib/api";
 import { ProductCard } from "@/shared/components/ProductCard";
+import { VendorMap } from "@/shared/components/VendorMap";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -49,17 +50,48 @@ async function fetchProducts(params: {
   return (await res.json()) as ProductsResponse;
 }
 
+async function fetchAllForCategories(cityId: string): Promise<Product[]> {
+  const qs = new URLSearchParams();
+  qs.set("cityId", cityId);
+  qs.set("limit", "100");
+  const res = await apiFetch(`/products?${qs.toString()}`);
+  if (!res.ok) throw new Error(await parseJsonError(res));
+  const data = (await res.json()) as ProductsResponse;
+  return data.items ?? [];
+}
+
 export default function ProductsRoute() {
   const { selectedCity } = useCity();
   const navigate = useNavigate();
-  const [search, setSearch] = useState("");
-  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const initialSearch = searchParams.get("search") ?? "";
+  const [search, setSearch] = useState(initialSearch);
+  const [debouncedSearch, setDebouncedSearch] = useState(initialSearch);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
 
   useEffect(() => {
-    const t = setTimeout(() => setDebouncedSearch(search), 300);
+    const t = setTimeout(() => {
+      setDebouncedSearch(search);
+      const next = new URLSearchParams(searchParams);
+      if (search.trim()) next.set("search", search.trim());
+      else next.delete("search");
+      if (next.toString() !== searchParams.toString()) {
+        setSearchParams(next, { replace: true });
+      }
+    }, 300);
     return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search]);
+
+  const handleSearch = () => {
+    setDebouncedSearch(search);
+    const next = new URLSearchParams(searchParams);
+    if (search.trim()) next.set("search", search.trim());
+    else next.delete("search");
+    if (next.toString() !== searchParams.toString()) {
+      setSearchParams(next, { replace: true });
+    }
+  };
 
   const { data: cities } = useQuery({
     queryKey: ["cities"],
@@ -70,6 +102,14 @@ export default function ProductsRoute() {
     queryKey: ["shops", selectedCity],
     queryFn: () => fetchShopsByCity(selectedCity as string),
     enabled: !!selectedCity,
+  });
+
+  const { data: allItems } = useQuery({
+    queryKey: ["products-all-cats", selectedCity],
+    queryFn: () => fetchAllForCategories(selectedCity as string),
+    enabled: !!selectedCity,
+    staleTime: 60 * 1000,
+    refetchOnWindowFocus: true,
   });
 
   const {
@@ -85,6 +125,8 @@ export default function ProductsRoute() {
         category: selectedCategory,
       }),
     enabled: !!selectedCity,
+    staleTime: 30 * 1000,
+    refetchOnWindowFocus: true,
   });
 
   useEffect(() => {
@@ -99,14 +141,15 @@ export default function ProductsRoute() {
   const items = productsData?.items ?? [];
   const cityShopsCount = shops?.length ?? 0;
 
-  // Categories are derived from the current product results so the chip set
-  // reflects what the API actually exposed for this city/search.
-  const categories = useMemo(() => {
+  // Chip set is derived from the city-wide product list so chips don't vanish
+  // when a filter narrows the visible result set. The currently selected
+  // category is always included even if it's not in the cached list.
+  const categoryChips = useMemo(() => {
     const cats = new Set<string>();
-    for (const p of items) cats.add(p.category);
+    for (const p of allItems ?? []) cats.add(p.category);
     if (selectedCategory) cats.add(selectedCategory);
-    return Array.from(cats);
-  }, [items, selectedCategory]);
+    return Array.from(cats).sort();
+  }, [allItems, selectedCategory]);
 
   if (!selectedCity) return null;
 
@@ -124,14 +167,20 @@ export default function ProductsRoute() {
       </div>
 
       <div className="flex flex-col sm:flex-row gap-4 mb-6">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search products..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-10"
-          />
+        <div className="relative flex-1 flex gap-2">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search products..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+              className="pl-10"
+            />
+          </div>
+          <Button onClick={handleSearch} type="button">
+            Search
+          </Button>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           <SlidersHorizontal className="h-4 w-4 text-muted-foreground shrink-0" />
@@ -142,7 +191,7 @@ export default function ProductsRoute() {
           >
             All
           </Button>
-          {categories.map((cat) => (
+          {categoryChips.map((cat) => (
             <Button
               key={cat}
               variant={selectedCategory === cat ? "default" : "outline"}
@@ -202,6 +251,8 @@ export default function ProductsRoute() {
           <p className="text-sm text-muted-foreground mt-2">Try a different search or category</p>
         </div>
       )}
+
+      <VendorMap />
     </div>
   );
 }

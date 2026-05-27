@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link, Navigate } from "react-router-dom";
 import { Package } from "lucide-react";
 import { motion } from "framer-motion";
+import { format } from "date-fns";
 
 import { useAuth } from "@/features/auth/auth-context";
 import { apiFetch, parseJsonError } from "@/lib/api";
@@ -83,7 +84,11 @@ export default function OrdersRoute() {
                 <div className="text-right">
                   <p className="text-sm text-muted-foreground">Total</p>
                   <p className="text-xl font-bold text-foreground">₹{order.total.toLocaleString()}</p>
-                  {order.createdAt && <p className="text-xs text-muted-foreground mt-1">{new Date(order.createdAt).toLocaleString()}</p>}
+                  {order.createdAt && (
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {format(new Date(order.createdAt), "dd MMM yyyy, h:mm a")}
+                    </p>
+                  )}
                 </div>
               </div>
               <ul className="divide-y border-t pt-4">

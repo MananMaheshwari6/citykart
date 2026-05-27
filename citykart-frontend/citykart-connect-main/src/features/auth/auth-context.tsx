@@ -13,7 +13,13 @@ interface AuthContextValue {
   user: User | null;
   ready: boolean;
   login: (email: string, password: string) => Promise<void>;
-  register: (name: string, email: string, password: string, role: User["role"]) => Promise<void>;
+  register: (
+    name: string,
+    email: string,
+    password: string,
+    role: User["role"],
+    cityId?: string
+  ) => Promise<void>;
   logout: () => Promise<void>;
   isVendor: boolean;
 }
@@ -53,16 +59,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(data.user);
   }, []);
 
-  const register = useCallback(async (name: string, email: string, password: string, role: User["role"]) => {
-    const res = await apiFetch("/auth/register", {
-      method: "POST",
-      body: JSON.stringify({ name, email, password, role }),
-    });
-    if (!res.ok) throw new Error(await parseJsonError(res));
-    const data = (await res.json()) as { user: User; token: string };
-    setStoredToken(data.token);
-    setUser(data.user);
-  }, []);
+  const register = useCallback(
+    async (
+      name: string,
+      email: string,
+      password: string,
+      role: User["role"],
+      cityId?: string
+    ) => {
+      const body: Record<string, string> = { name, email, password, role };
+      if (cityId) body.cityId = cityId;
+      const res = await apiFetch("/auth/register", {
+        method: "POST",
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) throw new Error(await parseJsonError(res));
+      const data = (await res.json()) as { user: User; token: string };
+      setStoredToken(data.token);
+      setUser(data.user);
+    },
+    []
+  );
 
   const logout = useCallback(async () => {
     try {

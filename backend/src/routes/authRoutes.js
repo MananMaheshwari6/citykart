@@ -9,12 +9,21 @@ const router = Router();
 
 router.post("/register", async (req, res) => {
   try {
-    const { name, email, password, role } = req.body || {};
+    const { name, email, password, role, cityId } = req.body || {};
     if (!name || !email || !password || !role) {
       return res.status(400).json({ error: "name, email, password, and role are required" });
     }
     if (!["buyer", "vendor"].includes(role)) {
       return res.status(400).json({ error: "role must be buyer or vendor" });
+    }
+    if (role === "vendor") {
+      if (!cityId) {
+        return res.status(400).json({ error: "Please select a city for your shop" });
+      }
+      const cityExists = await City.findById(String(cityId));
+      if (!cityExists) {
+        return res.status(400).json({ error: "Selected city does not exist" });
+      }
     }
     const existing = await User.findOne({ email: String(email).toLowerCase() });
     if (existing) {
@@ -32,20 +41,17 @@ router.post("/register", async (req, res) => {
     });
 
     if (role === "vendor") {
-      const city = await City.findOne().sort({ name: 1 });
-      const cityId = city ? city._id : "mumbai";
+      const shopCityId = String(cityId);
       await Shop.create({
         _id: `shop_${user._id.toString()}`,
         name: `${user.name}'s Shop`,
-        cityId,
+        cityId: shopCityId,
         description: "",
         image: "https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=600&q=80",
         rating: 0,
         vendorId: user._id,
       });
-      if (city) {
-        await City.updateOne({ _id: city._id }, { $inc: { shopCount: 1 } });
-      }
+      await City.updateOne({ _id: shopCityId }, { $inc: { shopCount: 1 } });
     }
 
     const token = signToken(user);

@@ -9,6 +9,7 @@ import AuthRoute from "@/features/auth/routes/AuthRoute";
 import CartRoute from "@/features/cart/routes/CartRoute";
 import OrdersRoute from "@/features/orders/routes/OrdersRoute";
 import VendorDashboardRoute from "@/features/vendor/routes/VendorDashboardRoute";
+import WishlistRoute from "@/features/wishlist/routes/WishlistRoute";
 import NotFoundRoute from "@/app/router/NotFoundRoute";
 
 export function AppRouter() {
@@ -21,6 +22,7 @@ export function AppRouter() {
         <Route path="/products" element={<ProductsRoute />} />
         <Route path="/product/:id" element={<ProductDetailRoute />} />
         <Route path="/cart" element={<CartRoute />} />
+        <Route path="/wishlist" element={<WishlistRoute />} />
         <Route path="/orders" element={<OrdersRoute />} />
         <Route path="/vendor" element={<VendorDashboardRoute />} />
         <Route path="*" element={<NotFoundRoute />} />

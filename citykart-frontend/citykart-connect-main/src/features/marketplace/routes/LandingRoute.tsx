@@ -1,6 +1,8 @@
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { useQuery } from "@tanstack/react-query";
+import { toast } from "sonner";
 import {
   AlertCircle,
   MapPin,
@@ -42,10 +44,38 @@ const categoryCards: Array<{
   text: string;
   muted: string;
 }> = [
-  { emoji: "🌿", name: "Fresh Produce", count: "2,400", bg: "bg-green-50", text: "text-green-900", muted: "text-green-600" },
-  { emoji: "🥛", name: "Dairy & Eggs", count: "840", bg: "bg-amber-50", text: "text-amber-900", muted: "text-amber-600" },
-  { emoji: "🧺", name: "Handicrafts", count: "1,200", bg: "bg-purple-50", text: "text-purple-900", muted: "text-purple-600" },
-  { emoji: "📱", name: "Electronics", count: "680", bg: "bg-blue-50", text: "text-blue-900", muted: "text-blue-600" },
+  {
+    emoji: "🌿",
+    name: "Fresh Produce",
+    count: "2,400",
+    bg: "bg-green-50 dark:bg-green-950/40",
+    text: "text-green-900 dark:text-green-100",
+    muted: "text-green-600 dark:text-green-400",
+  },
+  {
+    emoji: "🥛",
+    name: "Dairy & Eggs",
+    count: "840",
+    bg: "bg-amber-50 dark:bg-amber-950/40",
+    text: "text-amber-900 dark:text-amber-100",
+    muted: "text-amber-600 dark:text-amber-400",
+  },
+  {
+    emoji: "🧺",
+    name: "Handicrafts",
+    count: "1,200",
+    bg: "bg-purple-50 dark:bg-purple-950/40",
+    text: "text-purple-900 dark:text-purple-100",
+    muted: "text-purple-600 dark:text-purple-400",
+  },
+  {
+    emoji: "📱",
+    name: "Electronics",
+    count: "680",
+    bg: "bg-blue-50 dark:bg-blue-950/40",
+    text: "text-blue-900 dark:text-blue-100",
+    muted: "text-blue-600 dark:text-blue-400",
+  },
 ];
 
 const heroStats: Array<{ icon: typeof Store; value: string; label: string }> = [
@@ -64,24 +94,24 @@ const howItWorksSteps: Array<{
 }> = [
   {
     icon: MapPin,
-    iconBg: "bg-orange-100",
-    iconText: "text-orange-600",
+    iconBg: "bg-orange-100 dark:bg-orange-950/40",
+    iconText: "text-orange-600 dark:text-orange-400",
     number: "01",
     title: "Pick your city",
     body: "Choose from 6 cities across India and browse local vendors near you.",
   },
   {
     icon: ShoppingBag,
-    iconBg: "bg-green-100",
-    iconText: "text-green-600",
+    iconBg: "bg-green-100 dark:bg-green-950/40",
+    iconText: "text-green-600 dark:text-green-400",
     number: "02",
     title: "Browse & add to cart",
     body: "Explore thousands of products from verified local shops. Filter by category, price, and distance.",
   },
   {
     icon: Truck,
-    iconBg: "bg-blue-100",
-    iconText: "text-blue-600",
+    iconBg: "bg-blue-100 dark:bg-blue-950/40",
+    iconText: "text-blue-600 dark:text-blue-400",
     number: "03",
     title: "Fast local delivery",
     body: "Get your order delivered same-day or schedule a pickup directly from the vendor.",
@@ -95,8 +125,9 @@ const footerLinkGroups: Array<{ heading: string; links: string[] }> = [
 ];
 
 export default function LandingRoute() {
-  const { setSelectedCity } = useCity();
+  const { selectedCity, setSelectedCity } = useCity();
   const navigate = useNavigate();
+  const [heroSearch, setHeroSearch] = useState("");
 
   const { data: cities, isLoading, error } = useQuery({
     queryKey: ["cities"],
@@ -108,10 +139,20 @@ export default function LandingRoute() {
     navigate("/products");
   };
 
+  const handleHeroSearch = () => {
+    if (!selectedCity) {
+      toast.info("Pick a city below to start shopping");
+      document.getElementById("city-grid")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      return;
+    }
+    const q = heroSearch.trim();
+    navigate(q ? `/products?search=${encodeURIComponent(q)}` : "/products");
+  };
+
   return (
     <div className="bg-background">
       {/* SECTION 2 — HERO */}
-      <section className="bg-white pt-20 pb-16 border-b">
+      <section className="bg-background pt-20 pb-16 border-b">
         <div className="max-w-7xl mx-auto px-6">
           <div className="flex flex-col lg:flex-row items-center gap-12">
             <motion.div
@@ -120,7 +161,7 @@ export default function LandingRoute() {
               transition={{ duration: 0.5, ease: "easeOut" }}
               className="space-y-6 lg:w-3/5"
             >
-              <div className="inline-flex items-center gap-2 rounded-full bg-green-50 px-4 py-1.5 text-sm font-medium text-green-700">
+              <div className="inline-flex items-center gap-2 rounded-full bg-green-50 dark:bg-green-950/40 px-4 py-1.5 text-sm font-medium text-green-700 dark:text-green-300">
                 <MapPin className="h-3.5 w-3.5" />
                 Serving 6 Indian cities
               </div>
@@ -142,6 +183,9 @@ export default function LandingRoute() {
                 <input
                   className="flex-1 px-3 py-3.5 text-sm outline-none bg-transparent placeholder:text-muted-foreground"
                   placeholder="Search products, vendors, categories..."
+                  value={heroSearch}
+                  onChange={(e) => setHeroSearch(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleHeroSearch()}
                 />
                 <div className="flex items-center gap-1.5 border-l px-3 text-sm text-muted-foreground">
                   <MapPin className="h-3.5 w-3.5 text-orange-500" />
@@ -149,6 +193,7 @@ export default function LandingRoute() {
                 </div>
                 <button
                   type="button"
+                  onClick={handleHeroSearch}
                   className="m-1.5 rounded-xl bg-orange-500 px-4 py-2 text-sm font-medium text-white hover:bg-orange-600 transition-colors"
                 >
                   Search
@@ -193,7 +238,7 @@ export default function LandingRoute() {
       </section>
 
       {/* SECTION 3 — CITY GRID */}
-      <section className="py-16 bg-background">
+      <section id="city-grid" className="py-16 bg-background">
         <div className="max-w-7xl mx-auto px-6">
           <div className="flex items-end justify-between mb-8">
             <div>

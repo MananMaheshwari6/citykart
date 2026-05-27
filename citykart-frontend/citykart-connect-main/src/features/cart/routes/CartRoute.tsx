@@ -10,15 +10,24 @@ import { useCity } from "@/features/marketplace/city-context";
 
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
+import { Skeleton } from "@/components/ui/skeleton";
+import { SmartImage } from "@/shared/components/SmartImage";
 
 import { apiFetch, parseJsonError } from "@/lib/api";
 
 export default function CartRoute() {
-  const { items, removeFromCart, updateQuantity, totalPrice, clearCart } = useCart();
+  const { items, removeFromCart, updateQuantity, totalPrice, clearCart, isLoading: cartLoading } = useCart();
   const { user, ready } = useAuth();
   const { selectedCity } = useCity();
   const navigate = useNavigate();
   const [checkingOut, setCheckingOut] = useState(false);
+
+  // If city-context hasn't surfaced a value yet but localStorage has one
+  // saved, render a skeleton for one tick so we don't flash an empty-state
+  // before context catches up.
+  const savedCity =
+    typeof window !== "undefined" ? localStorage.getItem("citykart_city") : null;
+  const cityRehydrating = !selectedCity && !!savedCity;
 
   const handleCheckout = async () => {
     if (!ready) return;
@@ -54,10 +63,15 @@ export default function CartRoute() {
     }
   };
 
-  if (!ready) {
+  if (!ready || cartLoading || cityRehydrating) {
     return (
-      <div className="container py-20 text-center text-muted-foreground">
-        <p>Loading cart…</p>
+      <div className="container py-8">
+        <Skeleton className="h-8 w-48 mb-8" />
+        <div className="space-y-3">
+          {[1, 2, 3].map((i) => (
+            <Skeleton key={i} className="h-24 rounded-2xl w-full" />
+          ))}
+        </div>
       </div>
     );
   }
@@ -90,7 +104,11 @@ export default function CartRoute() {
               className="flex gap-4 rounded-xl border bg-card p-4"
             >
               <Link to={`/product/${item.product.id}`}>
-                <img src={item.product.image} alt={item.product.name} className="h-24 w-24 rounded-lg object-cover" />
+                <SmartImage
+                  src={item.product.image}
+                  alt={item.product.name}
+                  className="h-24 w-24 rounded-lg object-cover"
+                />
               </Link>
               <div className="flex-1 flex flex-col justify-between">
                 <div>
